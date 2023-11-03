@@ -68,7 +68,7 @@ import hubitat.scheduling.AsyncResponse
  */
 
 metadata {
-    definition(name: 'Tuya IoT Platform (Cloud)', namespace: 'tuya', author: 'Jonathan Bradshaw',
+    definition(name: 'Tuya IoT Platform (Cloud) - 2', namespace: 'tuya', author: 'Jonathan Bradshaw',
                 importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-drivers/main/Tuya/TuyaOpenCloudAPI.groovy') {
 
         capability 'Initialize'
@@ -406,12 +406,13 @@ void componentLock(DeviceWrapper dw) {
 void componentOn(DeviceWrapper dw) {
     Map<String, Map> functions = getFunctions(dw)
     String code = getFunctionCode(functions, tuyaFunctions.light + tuyaFunctions.power)
-
+    // LOG.debug "componentOn:\n functions: ${functions}\n code: ${code}"
     if (code != null) {
         if (txtEnable) { LOG.info "Turning ${dw} on" }
         tuyaSendDeviceCommandsAsync(dw.getDataValue('id'), [ 'code': code, 'value': true ])
+        tuyaGetStateAsyncForceLightStatus(dw.getDataValue('id'), true)
     } else {
-        Integer homeId = dw.getDataValue('homeId')
+        Integer homeId = dw.getDataValue('homeId') instanceof String ? Integer.parseInt(dw.getDataValue('homeId')) : dw.getDataValue('homeId')
         String sceneId = dw.getDataValue('sceneId')
         if (sceneId && homeId) {
             if (txtEnable) { LOG.info "Triggering ${dw} automation" }
@@ -430,9 +431,11 @@ void componentOff(DeviceWrapper dw) {
     if (code != null) {
         if (txtEnable) { LOG.info "Turning ${dw} off" }
         tuyaSendDeviceCommandsAsync(dw.getDataValue('id'), [ 'code': code, 'value': false ])
+        tuyaGetStateAsyncForceLightStatus(dw.getDataValue('id'), false)
     } else {
         LOG.error "Unable to determine off function code in ${functions}"
     }
+    componentRefresh(dw)
 }
 
 // Component command to open device
@@ -1932,11 +1935,43 @@ private void tuyaGetStateAsync(String deviceID) {
     tuyaGetAsync("/v1.0/devices/${deviceID}/status", null, 'tuyaGetStateResponse', [ id: deviceID ])
 }
 
+private void tuyaGetStateAsyncForceLightStatus(String deviceID, boolean lightStatus ) {
+    LOG.debug "Requesting device ${deviceID} state. Forcing light status ${lightStatus}"
+    if (lightStatus) {
+        tuyaGetAsync("/v1.0/devices/${deviceID}/status", null, 'tuyaGetStateResponseForceLightStatusOn', [ id: deviceID ])
+    } else {
+        tuyaGetAsync("/v1.0/devices/${deviceID}/status", null, 'tuyaGetStateResponseForceLightStatusOff', [ id: deviceID ])
+    }
+    
+}
+
 /* groovylint-disable-next-line UnusedPrivateMethod, UnusedPrivateMethodParameter */
 private void tuyaGetStateResponse(AsyncResponse response, Map data) {
     if (tuyaCheckResponse(response) == false) { return }
     data.status = response.json.result
     updateMultiDeviceStatus(data)
+}
+
+/* groovylint-disable-next-line UnusedPrivateMethod, UnusedPrivateMethodParameter */
+private void tuyaGetStateResponseForceLightStatus(AsyncResponse response, Map data, boolean forcedLightStatus) {
+    LOG.debug "forcing light status to ${forcedLightStatus}"
+    if (tuyaCheckResponse(response) == false) { return }
+    data.status = response.json.result
+    LOG.debug "status: ${data.status}"
+    lightStatus = data.status.find { x -> x.code == 'light'}
+    lightStatus.value = forcedLightStatus
+    LOG.debug "status mod: ${data.status}"
+    updateMultiDeviceStatus(data)
+}
+
+/* groovylint-disable-next-line UnusedPrivateMethod, UnusedPrivateMethodParameter */
+private void tuyaGetStateResponseForceLightStatusOn(AsyncResponse response, Map data) {
+    tuyaGetStateResponseForceLightStatus(response, data, true)
+}
+
+/* groovylint-disable-next-line UnusedPrivateMethod, UnusedPrivateMethodParameter */
+private void tuyaGetStateResponseForceLightStatusOff(AsyncResponse response, Map data) {
+    tuyaGetStateResponseForceLightStatus(response, data, false)
 }
 
 /* groovylint-disable-next-line UnusedPrivateMethod */
