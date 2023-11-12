@@ -410,7 +410,11 @@ void componentOn(DeviceWrapper dw) {
     if (code != null) {
         if (txtEnable) { LOG.info "Turning ${dw} on" }
         tuyaSendDeviceCommandsAsync(dw.getDataValue('id'), [ 'code': code, 'value': true ])
-        tuyaGetStateAsyncForceLightStatus(dw.getDataValue('id'), true)
+        //tuyaGetStateAsyncForceLightStatus(dw.getDataValue('id'), true)
+        Map<String, Object> data = [:];
+        data.id = dw.getDataValue('id')
+        data.status = [[ 'code': code, 'value': true ]]
+        updateMultiDeviceStatus(data)
     } else {
         Integer homeId = dw.getDataValue('homeId') instanceof String ? Integer.parseInt(dw.getDataValue('homeId')) : dw.getDataValue('homeId')
         String sceneId = dw.getDataValue('sceneId')
@@ -431,11 +435,15 @@ void componentOff(DeviceWrapper dw) {
     if (code != null) {
         if (txtEnable) { LOG.info "Turning ${dw} off" }
         tuyaSendDeviceCommandsAsync(dw.getDataValue('id'), [ 'code': code, 'value': false ])
-        tuyaGetStateAsyncForceLightStatus(dw.getDataValue('id'), false)
+        //tuyaGetStateAsyncForceLightStatus(dw.getDataValue('id'), false)
+        Map<String, Object> data = [:];
+        data.id = dw.getDataValue('id')
+        data.status = [[ 'code': code, 'value': false ]]
+        updateMultiDeviceStatus(data)
     } else {
         LOG.error "Unable to determine off function code in ${functions}"
     }
-    componentRefresh(dw)
+    // componentRefresh(dw)
 }
 
 // Component command to open device
@@ -1957,6 +1965,7 @@ private void tuyaGetStateResponseForceLightStatus(AsyncResponse response, Map da
     LOG.debug "forcing light status to ${forcedLightStatus}"
     if (tuyaCheckResponse(response) == false) { return }
     data.status = response.json.result
+    LOG.debug "data: ${data}"
     LOG.debug "status: ${data.status}"
     lightStatus = data.status.find { x -> x.code == 'light'}
     lightStatus.value = forcedLightStatus
